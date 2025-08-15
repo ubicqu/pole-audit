@@ -1,6 +1,9 @@
 package model
 
-import "github.com/brianvoe/gofakeit/v7"
+import (
+	"encoding/json"
+	"github.com/brianvoe/gofakeit/v7"
+)
 import "time"
 
 type Bearing string
@@ -21,74 +24,80 @@ type Posterity struct {
 	By string    `json:"by" fake:"{email}"`
 }
 
+func (p Posterity) MarshalJSON() ([]byte, error) {
+	return json.Marshal(map[string]interface{}{
+		"at": p.At.Format("2006-01-02T15:04:05Z"),
+		"by": p.By,
+	})
+}
+
 type Pole struct {
-	ID                uint32             `json:"id" gorm:"primarykey"`
+	ID                uint32             `json:"id" gorm:"primaryKey" fake:"skip"`
 	Latitude          float32            `json:"latitude" fake:"{latitude}"`
 	Longitude         float32            `json:"longitude" fake:"{longitude}"`
 	Street            string             `json:"street" fake:"{street}"`
 	Bearing           Bearing            `json:"bearing"`
 	Kind              *string            `json:"kind"`
-	Height            float32            `json:"height" fake:"{float32range:180,720}"`
+	Height            int32              `json:"height" `
 	Locked            bool               `json:"locked"`
 	Created           Posterity          `json:"created" gorm:"embedded;embeddedPrefix:created_"`
 	Updated           Posterity          `json:"updated" gorm:"embedded;embeddedPrefix:updated_"`
 	Deleted           *Posterity         `json:"deleted,omitempty" gorm:"embedded;embeddedPrefix:deleted_" fake:"skip"`
-	PoleInstallations []PoleInstallation `json:"pole_installations,omitempty" fake:"skip"`
+	PoleInstallations []PoleInstallation `json:"installations,omitempty" fake:"skip"`
 }
 
 type PoleInstallation struct {
-	ID        uint32     `json:"id" gorm:"primaryKey"`
-	PoleID    uint32     `json:"pole_id"`
-	UbiHubSn  *string    `json:"ubihub_sn" gorm:"column:ubihub_sn"`
-	CamerasSn *string    `json:"cameras_sn" gorm:"column:cameras_sn"`
-	Start     *time.Time `json:"start" gorm:"type:datetime" fake:"{pastdate}"`
-	End       *time.Time `json:"end" gorm:"type:datetime" fake:"{pastdate}"`
-	Created   Posterity  `json:"created" gorm:"embedded;embeddedPrefix:created_"`
-	Updated   Posterity  `json:"updated" gorm:"embedded;embeddedPrefix:updated_"`
-	Pole      *Pole      `json:"pole,omitempty" fake:"skip"`
+	ID         uint32      `json:"id" gorm:"primaryKey" fake:"skip"`
+	PoleID     uint32      `json:"-"`
+	UbiHubSn   *string     `json:"ubihub_sn" gorm:"column:ubihub_sn"`
+	CamerasSn  *string     `json:"cameras_sn" gorm:"column:cameras_sn"`
+	Start      *time.Time  `json:"start" gorm:"type:datetime" fake:"skip"`
+	End        *time.Time  `json:"end" gorm:"type:datetime" fake:"skip"`
+	Created    Posterity   `json:"created" gorm:"embedded;embeddedPrefix:created_"`
+	Updated    Posterity   `json:"updated" gorm:"embedded;embeddedPrefix:updated_"`
+	PoleAudits []PoleAudit `json:"audits" fake:"skip"`
 }
 
 type PoleAudit struct {
-	ID                 uint32           `json:"id" gorm:"primaryKey"`
-	PoleInstallationID uint32           `json:"installation_id"`
-	Attempt            uint32           `json:"attempt"`
-	State              string           `json:"state" fake:"{randomstring:[pending,approved,remediation,rejected]}"`
-	Summary            *string          `json:"summary"`
-	Auditor            string           `json:"auditor"`
-	Created            Posterity        `json:"created" gorm:"embedded;embeddedPrefix:created_"`
-	Updated            Posterity        `json:"updated" gorm:"embedded;embeddedPrefix:updated_"`
-	PoleInstallation   PoleInstallation `json:"pole_installation,omitempty" fake:"skip"`
-	PoleAuditable      PoleAuditable    `json:"pole_auditable,omitempty" fake:"skip"`
+	ID                 uint32              `json:"id" gorm:"primaryKey" fake:"skip"`
+	PoleInstallationID uint32              `json:"-"`
+	Attempt            uint32              `json:"attempt"`
+	State              string              `json:"state" fake:"{randomstring:[pending,approved,remediation,rejected]}"`
+	Summary            *string             `json:"summary"`
+	Auditor            string              `json:"auditor"`
+	Created            Posterity           `json:"created" gorm:"embedded;embeddedPrefix:created_"`
+	Updated            Posterity           `json:"updated" gorm:"embedded;embeddedPrefix:updated_"`
+	PoleAuditNotes     []PoleAuditNote     `json:"notes,omitempty" fake:"skip"`
+	PoleAuditQuestions []PoleAuditQuestion `json:"questions" gorm:"many2many:pole_auditables" fake:"skip"`
 }
 
 type PoleAuditNote struct {
-	ID          uint32    `json:"id" gorm:"primaryKey"`
-	PoleAuditID uint32    `json:"audit_id"`
+	ID          uint32    `json:"id" gorm:"primaryKey" fake:"skip"`
+	PoleAuditID uint32    `json:"-"`
 	Type        string    `json:"type" gorm:"column:kind;default:photo" fake:"{randomstring:[photo,audio,video,text]}"`
 	Datum       string    `json:"datum"`
 	Created     Posterity `json:"created" gorm:"embedded;embeddedPrefix:created_"`
 	Updated     Posterity `json:"updated" gorm:"embedded;embeddedPrefix:updated_"`
-	PoleAudit   PoleAudit `json:"pole_audit,omitempty" fake:"skip"`
 }
 
 type PoleAuditQuestion struct {
-	ID            uint32        `json:"id" gorm:"primaryKey"`
-	Device        string        `json:"device" fake:"{randomstring:[cell,hub,dtm,tvm]}"`
-	Position      uint32        `json:"position"`
-	Question      string        `json:"question"`
-	Input         string        `json:"input" fake:"{randomstring:[radio,text,selections,number,photo]}"`
-	Answer        string        `json:"answer"`
-	Created       Posterity     `json:"created" gorm:"embedded;embeddedPrefix:created_"`
-	Updated       Posterity     `json:"updated" gorm:"embedded;embeddedPrefix:updated_"`
-	Deleted       Posterity     `json:"deleted" gorm:"embedded;embeddedPrefix:deleted_" fake:"skip"`
-	PoleAuditable PoleAuditable `json:"pole_auditable,omitempty" fake:"skip"`
+	ID         uint32       `json:"id" gorm:"primaryKey" fake:"skip"`
+	Device     string       `json:"device" fake:"{randomstring:[cell,hub,dtm,tvm]}"`
+	Position   uint32       `json:"position"`
+	Question   string       `json:"question"`
+	Input      string       `json:"input" fake:"{randomstring:[radio,text,selections,number,photo]}"`
+	Answer     string       `json:"answer"`
+	Created    Posterity    `json:"created" gorm:"embedded;embeddedPrefix:created_"`
+	Updated    Posterity    `json:"updated" gorm:"embedded;embeddedPrefix:updated_"`
+	Deleted    Posterity    `json:"deleted" gorm:"embedded;embeddedPrefix:deleted_" fake:"skip"`
+	PoleAudits *[]PoleAudit `json:"audits,omitempty" gorm:"many2many:pole_auditables" fake:"skip"`
 }
 
 type PoleAuditQuestionAnswer struct {
-	ID            uint32        `json:"id" gorm:"primaryKey"`
-	Datum         string        `json:"datum"`
-	Created       Posterity     `json:"created" gorm:"embedded;embeddedPrefix:created_"`
-	PoleAuditable PoleAuditable `json:"pole_auditable,omitempty" fake:"skip"`
+	ID      uint32    `json:"id" gorm:"primaryKey" fake:"skip"`
+	Datum   string    `json:"datum"`
+	Created Posterity `json:"created" gorm:"embedded;embeddedPrefix:created_"`
+	//PoleAuditable PoleAuditable `json:"pole_auditable" fake:"skip"`
 }
 
 type PoleAuditable struct {
