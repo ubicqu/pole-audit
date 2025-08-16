@@ -4,44 +4,9 @@ import (
 	"encoding/json"
 	"gorm.io/gorm/clause"
 	"pole-audit/pkg/db"
-	"pole-audit/pkg/fun"
 	"testing"
 )
 import "github.com/brianvoe/gofakeit/v7"
-
-func TestPole(t *testing.T) {
-	var p Pole
-	if err := gofakeit.Struct(&p); err != nil {
-		t.Error(err)
-	}
-	db.Instance.Create(&p)
-}
-
-func TestPoleAndPoleInstallation(t *testing.T) {
-	var pole Pole
-	if err := gofakeit.Struct(&pole); err != nil {
-		t.Error(err)
-	}
-	db.Instance.Create(&pole)
-
-	var poleInstallation PoleInstallation
-	if err := gofakeit.Struct(&poleInstallation); err != nil {
-		t.Error(err)
-	}
-	poleInstallation.PoleID = pole.ID
-	db.Instance.Save(&poleInstallation)
-
-	var poleAudit PoleAudit
-	if err := gofakeit.Struct(&poleAudit); err != nil {
-		t.Error(err)
-	}
-	poleAudit.PoleInstallationID = poleInstallation.ID
-	db.Instance.Create(&poleAudit)
-
-	var p Pole
-	db.Instance.Preload("PoleInstallations.PoleAudits").First(&p, pole.ID)
-	fun.PrettyPrintln(p)
-}
 
 func TestModel(t *testing.T) {
 
@@ -49,38 +14,31 @@ func TestModel(t *testing.T) {
 	expected := fakePole()
 	db.Instance.Create(&expected)
 
+	// for each persisted installation, collect the audit id and mock audit question answers
 	var poleAuditIds []uint32
-
 	for _, install := range expected.PoleInstallations {
-		audits := install.PoleAudits
-		for _, audit := range audits {
-			poleAuditIds = append(poleAuditIds, audit.ID)
-			questions := audit.PoleAuditQuestions
-			for _, question := range questions {
-				answer := fakePoleAuditQuestionAnswer()
-				answer.QuestionID = question.ID
-				answer.AuditID = audit.ID
-				db.Instance.Create(&answer)
-			}
+		poleAuditIds = append(poleAuditIds, install.PoleAudit.ID)
+		for _, question := range install.PoleAudit.PoleAuditQuestions {
+			answer := fakePoleAuditQuestionAnswer(install.PoleAudit.ID, question.ID)
+			db.Instance.Create(&answer)
 		}
 	}
 
-	// define the actual result by querying poles with the expected pole ID and eagerly loaded relationships
+	// define the actual result by querying poles with the expected pole ID
+	// eagerly load immediate associations and nested relationships
 	var actual Pole
 	db.Instance.
-		Preload("PoleInstallations.PoleAudits.PoleAuditQuestions").
-		Preload("PoleInstallations.PoleAudits.PoleAuditNotes").
+		Preload("PoleInstallations.PoleAudit.PoleAuditQuestions").
+		Preload("PoleInstallations.PoleAudit.PoleAuditNotes").
 		Preload(clause.Associations).
-		Order("id desc").
 		First(&actual, "id = ?", expected.ID)
 
 	// marshal both expected and actual poles for precise comparison
 	eb, _ := json.Marshal(expected)
 	ab, _ := json.Marshal(actual)
 	if string(eb) != string(ab) {
-		// todo - fix time comparison ... it's 1 second off?
-		//t.Errorf("\nexp: %s\nact: %s", string(eb), string(ab))
-		//return
+		t.Errorf("\nexp: %s\nact: %s", string(eb), string(ab))
+		return
 	}
 
 	var answers []PoleAuditQuestionAnswer
@@ -91,24 +49,6 @@ func TestModel(t *testing.T) {
 
 	if len(answers) == 0 {
 		t.Fail()
-	}
-}
-
-func TestModelAnswers(t *testing.T) {
-
-	var pole Pole
-	db.Instance.
-		Preload("PoleInstallations.PoleAudits.PoleAuditNotes").
-		Preload(clause.Associations).
-		Last(&pole)
-	fun.PrettyPrintln(pole)
-	audit := pole.PoleInstallations[0].PoleAudits[0]
-	questions := audit.PoleAuditQuestions
-	for _, question := range questions {
-		answer := fakePoleAuditQuestionAnswer()
-		answer.QuestionID = question.ID
-		answer.AuditID = audit.ID
-		db.Instance.Create(&answer)
 	}
 }
 
@@ -128,9 +68,7 @@ func fakePoleInstallation() PoleInstallation {
 	if err := gofakeit.Struct(&poleInstallation); err != nil {
 		panic(err)
 	}
-	for i := 0; i < 2; i++ {
-		poleInstallation.PoleAudits = append(poleInstallation.PoleAudits, fakePoleAudit())
-	}
+	poleInstallation.PoleAudit = fakePoleAudit()
 	return poleInstallation
 }
 
@@ -164,10 +102,12 @@ func fakePoleAuditQuestion() PoleAuditQuestion {
 	return poleAuditQuestion
 }
 
-func fakePoleAuditQuestionAnswer() PoleAuditQuestionAnswer {
+func fakePoleAuditQuestionAnswer(auditID, questionID uint32) PoleAuditQuestionAnswer {
 	var poleAuditQuestionAnswer PoleAuditQuestionAnswer
 	if err := gofakeit.Struct(&poleAuditQuestionAnswer); err != nil {
 		panic(err)
 	}
+	poleAuditQuestionAnswer.AuditID = auditID
+	poleAuditQuestionAnswer.QuestionID = questionID
 	return poleAuditQuestionAnswer
 }

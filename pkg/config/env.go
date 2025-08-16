@@ -12,13 +12,17 @@ type properties struct {
 	ENV string `env:"ENV" envDefault:"dev"`
 }
 
+func (p properties) IsDev() bool {
+	return Properties.ENV == "dev"
+}
+
 var Properties properties
 
 func init() {
 	if err := env.Parse(&Properties); err != nil {
 		panic(err)
 	}
-	if Properties.ENV == "dev" {
+	if Properties.IsDev() {
 		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
 	}
 }
